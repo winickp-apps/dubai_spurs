@@ -84,7 +84,8 @@ export default function PredictionForm({ fixture }: Props) {
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="e.g. Jamie Redknapp"
+            placeholder="Full name"
+            required
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy"
             autoComplete="name"
           />
@@ -96,7 +97,8 @@ export default function PredictionForm({ fixture }: Props) {
             type="tel"
             value={phone}
             onChange={e => setPhone(e.target.value)}
-            placeholder="e.g. +971 50 123 4567"
+            placeholder="Mobile number"
+            required
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy"
             autoComplete="tel"
           />
