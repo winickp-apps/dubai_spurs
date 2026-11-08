@@ -287,6 +287,8 @@ export default function Admin() {
   const [unlockPassword, setUnlockPassword] = useState('')
   const [unlockError, setUnlockError] = useState('')
   const [unlocking, setUnlocking] = useState(false)
+  const [settingWinner, setSettingWinner] = useState<string | null>(null)
+  const [deletingFixture, setDeletingFixture] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -371,14 +373,14 @@ export default function Admin() {
     setDrawing(false)
   }
 
-  async function saveWinner() {
-    if (!fixture || !drawnWinner) return
+  async function confirmWinner(prediction: Prediction) {
+    if (!fixture) return
     await supabase.from('winners').insert({
       fixture_id: fixture.id,
-      prediction_id: drawnWinner.id,
-      name: drawnWinner.name,
-      predicted_home: drawnWinner.home_score,
-      predicted_away: drawnWinner.away_score,
+      prediction_id: prediction.id,
+      name: prediction.name,
+      predicted_home: prediction.home_score,
+      predicted_away: prediction.away_score,
       actual_home: fixture.actual_home_score!,
       actual_away: fixture.actual_away_score!,
       home_team: fixture.home_team,
@@ -388,6 +390,33 @@ export default function Admin() {
     })
     setWinnerSaved(true)
     loadWinners()
+  }
+
+  async function saveWinner() {
+    if (!drawnWinner) return
+    await confirmWinner(drawnWinner)
+  }
+
+  async function setWinnerFromPrediction(prediction: Prediction) {
+    if (!fixture || !confirm(`Set ${prediction.name} as this week's winner?`)) return
+    setSettingWinner(prediction.id)
+    await confirmWinner(prediction)
+    setSettingWinner(null)
+  }
+
+  async function deleteFixture() {
+    if (!fixture) return
+    if (!confirm(`Delete "${fixture.home_team} vs ${fixture.away_team}" and all its predictions? This cannot be undone.`)) return
+    setDeletingFixture(true)
+    await supabase.from('winners').delete().eq('fixture_id', fixture.id)
+    await supabase.from('fixtures').delete().eq('id', fixture.id)
+    setFixture(null)
+    setPredictions([])
+    setDrawnWinner(null)
+    setWinnerSaved(false)
+    setOverrideMode(false)
+    setWinners(prev => prev.filter(w => w.fixture_id !== fixture.id))
+    setDeletingFixture(false)
   }
 
   async function addManualPrediction() {
@@ -557,6 +586,16 @@ export default function Admin() {
                     <Plus size={16} />
                     Set Up Next Week's Fixture
                   </button>
+
+                  {/* Delete fixture (testing) */}
+                  <button
+                    onClick={deleteFixture}
+                    disabled={deletingFixture}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold bg-red-50 text-red-500 border border-red-200 disabled:opacity-60"
+                  >
+                    <Trash2 size={15} />
+                    {deletingFixture ? 'Deleting…' : 'Delete This Fixture'}
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -700,9 +739,19 @@ export default function Admin() {
                             <div className="font-semibold text-sm text-gray-800">{p.name}</div>
                             <div className="text-xs text-gray-400">{p.phone}</div>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
                             <span className="font-black text-spurs-navy">{p.home_score}–{p.away_score}</span>
-                            {isCorrect && <CheckCircle size={16} className="text-green-500" />}
+                            {isCorrect && <CheckCircle size={16} className="text-green-500 shrink-0" />}
+                            {isCorrect && !isLocked && (
+                              <button
+                                onClick={() => setWinnerFromPrediction(p)}
+                                disabled={settingWinner === p.id}
+                                title="Set as Winner"
+                                className="text-yellow-400 hover:text-yellow-500 transition-colors p-1 disabled:opacity-30"
+                              >
+                                <Trophy size={15} />
+                              </button>
+                            )}
                             <button
                               onClick={() => { if (!isLocked && confirm(`Delete ${p.name}'s prediction?`)) deletePrediction(p.id) }}
                               disabled={isLocked}
