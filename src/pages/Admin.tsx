@@ -69,7 +69,7 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
 }
 
 // ── Fixture Picker (from live schedule) ──────────────────────────────────────
-function FixturePicker({ fixture, onSaved }: { fixture: Fixture | null; onSaved: () => void }) {
+function FixturePicker({ onSaved }: { onSaved: () => void }) {
   const [matches, setMatches] = useState<ApiMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -96,7 +96,6 @@ function FixturePicker({ fixture, onSaved }: { fixture: Fixture | null; onSaved:
   async function selectMatch(m: ApiMatch, kickoffTime: string) {
     setSaving(m.id)
     const utc = new Date(m.utcDate)
-    // Convert UTC to Dubai time (UTC+4)
     const dubaiDate = new Date(utc.getTime() + 4 * 60 * 60 * 1000)
     const matchDate = dubaiDate.toISOString().slice(0, 10)
 
@@ -113,12 +112,10 @@ function FixturePicker({ fixture, onSaved }: { fixture: Fixture | null; onSaved:
       predictions_open: true,
     }
 
-    if (fixture) {
-      await supabase.from('fixtures').update(payload).eq('id', fixture.id)
-    } else {
-      await supabase.from('fixtures').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('fixtures').insert(payload)
-    }
+    // Always create a fresh fixture — never update an existing one.
+    // This gives every game a new ID so old predictions don't carry over.
+    await supabase.from('fixtures').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('fixtures').insert(payload)
     setSaving(null)
     onSaved()
   }
@@ -210,6 +207,55 @@ function FixturePicker({ fixture, onSaved }: { fixture: Fixture | null; onSaved:
           )
         })
       )}
+    </div>
+  )
+}
+
+// ── Kick-off time / venue inline edit ────────────────────────────────────────
+function KickoffEdit({ fixture, onSaved }: { fixture: Fixture; onSaved: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [time, setTime] = useState(fixture.match_time)
+  const [venue, setVenue] = useState(fixture.venue ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    await supabase.from('fixtures').update({ match_time: time, venue: venue.trim() || null }).eq('id', fixture.id)
+    setSaving(false)
+    setOpen(false)
+    onSaved()
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold bg-white border border-gray-200 text-gray-500">
+        <Pencil size={14} />
+        Edit Kick-off Time / Venue
+      </button>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1">Kick-off (Dubai)</label>
+          <input type="time" value={time} onChange={e => setTime(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1">Venue</label>
+          <input value={venue} onChange={e => setVenue(e.target.value)} placeholder="Optional"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+        </div>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={() => setOpen(false)} className="flex-1 border border-gray-200 text-gray-500 font-semibold py-2 rounded-xl text-sm">Cancel</button>
+        <button onClick={save} disabled={saving} className="flex-1 bg-spurs-navy text-white font-bold py-2 rounded-xl text-sm disabled:opacity-60">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -484,49 +530,53 @@ export default function Admin() {
         {/* ── Fixture Tab ── */}
         {tab === 'fixture' && (
           <div className="space-y-4">
-            {fixture && !editing ? (
-              <div className="space-y-3">
-                <FixtureCard fixture={fixture} />
-                <div className="grid grid-cols-2 gap-3">
+            {!editing ? (
+              fixture ? (
+                <div className="space-y-3">
+                  <FixtureCard fixture={fixture} />
+
+                  {/* Open / close predictions */}
                   <button
                     onClick={togglePredictions}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-colors ${
-                      fixture.predictions_open
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-green-500 text-white'
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold transition-colors ${
+                      fixture.predictions_open ? 'bg-amber-500 text-white' : 'bg-green-500 text-white'
                     }`}
                   >
                     {fixture.predictions_open ? <Lock size={16} /> : <Unlock size={16} />}
                     {fixture.predictions_open ? 'Close Predictions' : 'Open Predictions'}
                   </button>
+
+                  {/* Inline kick-off time / venue edit */}
+                  <KickoffEdit fixture={fixture} onSaved={loadFixture} />
+
+                  {/* New fixture for next week */}
                   <button
                     onClick={() => setEditing(true)}
-                    className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-white border border-gray-200 text-spurs-navy"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-spurs-navy text-white"
                   >
-                    <Pencil size={16} />
-                    Change Fixture
+                    <Plus size={16} />
+                    Set Up Next Week's Fixture
                   </button>
                 </div>
-                <button
-                  onClick={() => { setEditing(true); setFixture(null) }}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-white border border-gray-200 text-gray-500"
-                >
-                  <Plus size={16} />
-                  New Fixture for Next Week
-                </button>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-2xl p-6 text-center text-gray-400 text-sm">No active fixture.</div>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-spurs-navy text-white"
+                  >
+                    <Plus size={16} />
+                    Set Up This Week's Fixture
+                  </button>
+                </div>
+              )
             ) : (
               <div className="space-y-3">
-                <FixturePicker
-                  fixture={editing ? fixture : null}
-                  onSaved={() => { setEditing(false); loadFixture() }}
-                />
-                {editing && (
-                  <button onClick={() => setEditing(false)}
-                    className="w-full border border-gray-200 text-gray-500 font-semibold py-3 rounded-2xl text-sm">
-                    Cancel
-                  </button>
-                )}
+                <FixturePicker onSaved={() => { setEditing(false); loadFixture() }} />
+                <button onClick={() => setEditing(false)}
+                  className="w-full border border-gray-200 text-gray-500 font-semibold py-3 rounded-2xl text-sm">
+                  Cancel
+                </button>
               </div>
             )}
           </div>
