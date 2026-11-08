@@ -2,6 +2,8 @@ export interface Fixture {
   id: string
   home_team: string
   away_team: string
+  home_crest: string | null
+  away_crest: string | null
   match_date: string
   match_time: string
   venue: string | null

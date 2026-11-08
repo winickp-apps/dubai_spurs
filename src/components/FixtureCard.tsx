@@ -7,6 +7,18 @@ function formatDate(d: string) {
   })
 }
 
+function TeamBadge({ crest, name }: { crest: string | null; name: string }) {
+  if (!crest) return null
+  return (
+    <img
+      src={crest}
+      alt={name}
+      className="w-12 h-12 object-contain mx-auto mb-2"
+      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
+  )
+}
+
 interface Props {
   fixture: Fixture
   showStatus?: boolean
@@ -34,7 +46,11 @@ export default function FixtureCard({ fixture, showStatus = true }: Props) {
 
       <div className="px-4 py-5">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-bold text-base text-center flex-1 leading-tight">{fixture.home_team}</span>
+          <div className="flex-1 text-center">
+            <TeamBadge crest={fixture.home_crest} name={fixture.home_team} />
+            <span className="font-bold text-sm leading-tight block">{fixture.home_team}</span>
+          </div>
+
           <div className="text-center px-2 shrink-0">
             {hasResult ? (
               <div className="text-3xl font-black tracking-tight">
@@ -44,7 +60,11 @@ export default function FixtureCard({ fixture, showStatus = true }: Props) {
               <div className="text-xl font-bold text-blue-300">vs</div>
             )}
           </div>
-          <span className="font-bold text-base text-center flex-1 leading-tight">{fixture.away_team}</span>
+
+          <div className="flex-1 text-center">
+            <TeamBadge crest={fixture.away_crest} name={fixture.away_team} />
+            <span className="font-bold text-sm leading-tight block">{fixture.away_team}</span>
+          </div>
         </div>
       </div>
 

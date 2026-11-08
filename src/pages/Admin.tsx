@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getUpcomingSpursMatches, type ApiMatch } from '../lib/footballApi'
 import type { Fixture, Prediction, Winner } from '../lib/types'
 import Header from '../components/Header'
 import FixtureCard from '../components/FixtureCard'
-import { LogOut, Shuffle, Lock, Unlock, Trophy, Plus, Pencil, CheckCircle, Trash2 } from 'lucide-react'
+import { LogOut, Shuffle, Lock, Unlock, Trophy, Plus, Pencil, CheckCircle, Trash2, RefreshCw, CalendarDays } from 'lucide-react'
 
 type Tab = 'fixture' | 'predictions' | 'draw' | 'history'
 
@@ -67,96 +68,149 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
   )
 }
 
-// ── Fixture Form ─────────────────────────────────────────────────────────────
-function FixtureForm({ fixture, onSaved }: { fixture: Fixture | null; onSaved: () => void }) {
-  const isNew = !fixture
-  const [homeTeam, setHomeTeam] = useState(fixture?.home_team ?? 'Tottenham Hotspur')
-  const [awayTeam, setAwayTeam] = useState(fixture?.away_team ?? '')
-  const [matchDate, setMatchDate] = useState(fixture?.match_date ?? '')
-  const [matchTime, setMatchTime] = useState(fixture?.match_time ?? '15:00')
-  const [venue, setVenue] = useState(fixture?.venue ?? '')
-  const [competition, setCompetition] = useState(fixture?.competition ?? 'Premier League')
-  const [saving, setSaving] = useState(false)
+// ── Fixture Picker (from live schedule) ──────────────────────────────────────
+function FixturePicker({ fixture, onSaved }: { fixture: Fixture | null; onSaved: () => void }) {
+  const [matches, setMatches] = useState<ApiMatch[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState<number | null>(null)
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!awayTeam.trim() || !matchDate) return setError('Opponent and date are required.')
+  // Edit mode state
+  const [editMatch, setEditMatch] = useState<ApiMatch | null>(null)
+  const [editTime, setEditTime] = useState('')
+
+  useEffect(() => { fetchMatches() }, [])
+
+  async function fetchMatches() {
+    setLoading(true)
     setError('')
-    setSaving(true)
+    try {
+      const data = await getUpcomingSpursMatches()
+      setMatches(data)
+    } catch {
+      setError('Could not load fixtures. Check your connection.')
+    }
+    setLoading(false)
+  }
+
+  async function selectMatch(m: ApiMatch, kickoffTime: string) {
+    setSaving(m.id)
+    const utc = new Date(m.utcDate)
+    // Convert UTC to Dubai time (UTC+4)
+    const dubaiDate = new Date(utc.getTime() + 4 * 60 * 60 * 1000)
+    const matchDate = dubaiDate.toISOString().slice(0, 10)
 
     const payload = {
-      home_team: homeTeam.trim(),
-      away_team: awayTeam.trim(),
+      home_team: m.homeTeam.name,
+      away_team: m.awayTeam.name,
+      home_crest: m.homeTeam.crest,
+      away_crest: m.awayTeam.crest,
       match_date: matchDate,
-      match_time: matchTime,
-      venue: venue.trim() || null,
-      competition: competition.trim(),
+      match_time: kickoffTime,
+      venue: m.venue ?? null,
+      competition: m.competition.name,
       is_active: true,
       predictions_open: true,
     }
 
-    if (isNew) {
-      // deactivate all other fixtures first
+    if (fixture) {
+      await supabase.from('fixtures').update(payload).eq('id', fixture.id)
+    } else {
       await supabase.from('fixtures').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000')
       await supabase.from('fixtures').insert(payload)
-    } else {
-      await supabase.from('fixtures').update(payload).eq('id', fixture!.id)
     }
-
-    setSaving(false)
+    setSaving(null)
     onSaved()
   }
 
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center justify-center gap-3 text-gray-400 text-sm">
+        <RefreshCw size={16} className="animate-spin" />
+        Loading fixtures…
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
+        <p className="text-sm text-red-600">{error}</p>
+        <button onClick={fetchMatches} className="text-sm text-spurs-navy font-semibold">Retry</button>
+      </div>
+    )
+  }
+
+  // Confirm kick-off time modal
+  if (editMatch) {
+    const utc = new Date(editMatch.utcDate)
+    const dubai = new Date(utc.getTime() + 4 * 60 * 60 * 1000)
+    const defaultTime = dubai.toISOString().slice(11, 16)
+    if (!editTime) setEditTime(defaultTime)
+
+    return (
+      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <img src={editMatch.homeTeam.crest} alt={editMatch.homeTeam.name} className="w-8 h-8 object-contain" />
+          <span className="font-bold text-spurs-navy text-sm">{editMatch.homeTeam.shortName} vs {editMatch.awayTeam.shortName}</span>
+          <img src={editMatch.awayTeam.crest} alt={editMatch.awayTeam.name} className="w-8 h-8 object-contain" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Confirm Kick-off Time (Dubai)</label>
+          <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+        </div>
+        <div className="flex gap-3">
+          <button onClick={() => setEditMatch(null)} className="flex-1 border border-gray-200 text-gray-500 font-bold py-3 rounded-2xl text-sm">Back</button>
+          <button
+            onClick={() => selectMatch(editMatch, editTime)}
+            disabled={saving === editMatch.id}
+            className="flex-1 bg-spurs-navy text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60"
+          >
+            {saving === editMatch.id ? 'Saving…' : 'Set as This Week\'s Fixture'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={handleSave} className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-      <h3 className="font-bold text-spurs-navy text-sm uppercase tracking-wide">
-        {isNew ? 'Add New Fixture' : 'Edit Fixture'}
-      </h3>
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1">Home Team</label>
-        <input value={homeTeam} onChange={e => setHomeTeam(e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1">Away Team (Opponent)</label>
-        <input value={awayTeam} onChange={e => setAwayTeam(e.target.value)} placeholder="e.g. Arsenal"
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1">Date</label>
-          <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+    <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-bold text-spurs-navy">
+          <CalendarDays size={16} />
+          Upcoming Fixtures
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1">Kick-off</label>
-          <input type="time" value={matchTime} onChange={e => setMatchTime(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
-        </div>
+        <button onClick={fetchMatches} className="text-gray-400 hover:text-spurs-navy p-1">
+          <RefreshCw size={14} />
+        </button>
       </div>
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1">Competition</label>
-        <select value={competition} onChange={e => setCompetition(e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy bg-white">
-          {['Premier League','Champions League','Europa League','FA Cup','Carabao Cup','Friendly'].map(c => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1">Venue (optional)</label>
-        <input value={venue} onChange={e => setVenue(e.target.value)} placeholder="e.g. Tottenham Hotspur Stadium"
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
-      </div>
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+      {matches.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-6">No upcoming fixtures found.</p>
+      ) : (
+        matches.map((m, i) => {
+          const utc = new Date(m.utcDate)
+          const dubai = new Date(utc.getTime() + 4 * 60 * 60 * 1000)
+          const dateStr = dubai.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+          return (
+            <button
+              key={m.id}
+              onClick={() => { setEditMatch(m); setEditTime('') }}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${i < matches.length - 1 ? 'border-b border-gray-100' : ''}`}
+            >
+              <img src={m.homeTeam.crest} alt={m.homeTeam.shortName} className="w-7 h-7 object-contain shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-800 truncate">
+                  {m.homeTeam.shortName} vs {m.awayTeam.shortName}
+                </div>
+                <div className="text-xs text-gray-400">{m.competition.name} · {dateStr}</div>
+              </div>
+              <img src={m.awayTeam.crest} alt={m.awayTeam.shortName} className="w-7 h-7 object-contain shrink-0" />
+            </button>
+          )
+        })
       )}
-      <button type="submit" disabled={saving}
-        className="w-full bg-spurs-navy text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60">
-        {saving ? 'Saving…' : isNew ? 'Create Fixture' : 'Save Changes'}
-      </button>
-    </form>
+    </div>
   )
 }
 
@@ -450,11 +504,11 @@ export default function Admin() {
                     className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-white border border-gray-200 text-spurs-navy"
                   >
                     <Pencil size={16} />
-                    Edit Fixture
+                    Change Fixture
                   </button>
                 </div>
                 <button
-                  onClick={() => { setEditing(false); setFixture(null) }}
+                  onClick={() => { setEditing(true); setFixture(null) }}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold bg-white border border-gray-200 text-gray-500"
                 >
                   <Plus size={16} />
@@ -462,10 +516,18 @@ export default function Admin() {
                 </button>
               </div>
             ) : (
-              <FixtureForm
-                fixture={editing ? fixture : null}
-                onSaved={() => { setEditing(false); loadFixture() }}
-              />
+              <div className="space-y-3">
+                <FixturePicker
+                  fixture={editing ? fixture : null}
+                  onSaved={() => { setEditing(false); loadFixture() }}
+                />
+                {editing && (
+                  <button onClick={() => setEditing(false)}
+                    className="w-full border border-gray-200 text-gray-500 font-semibold py-3 rounded-2xl text-sm">
+                    Cancel
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

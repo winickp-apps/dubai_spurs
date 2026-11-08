@@ -136,9 +136,9 @@ export default function PredictionForm({ fixture }: Props) {
           Your Score Prediction
         </h3>
         <div className="flex justify-around items-center">
-          <ScorePicker label={fixture.home_team} value={homeScore} onChange={setHomeScore} />
+          <ScorePicker label={fixture.home_team} crest={fixture.home_crest} value={homeScore} onChange={setHomeScore} />
           <div className="text-2xl font-black text-gray-300">–</div>
-          <ScorePicker label={fixture.away_team} value={awayScore} onChange={setAwayScore} />
+          <ScorePicker label={fixture.away_team} crest={fixture.away_crest} value={awayScore} onChange={setAwayScore} />
         </div>
       </div>
 
