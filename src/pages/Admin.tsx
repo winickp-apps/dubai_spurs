@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { Fixture, Prediction, Winner } from '../lib/types'
 import Header from '../components/Header'
 import FixtureCard from '../components/FixtureCard'
-import { LogOut, Shuffle, Lock, Unlock, Trophy, Plus, Pencil, CheckCircle } from 'lucide-react'
+import { LogOut, Shuffle, Lock, Unlock, Trophy, Plus, Pencil, CheckCircle, Trash2 } from 'lucide-react'
 
 type Tab = 'fixture' | 'predictions' | 'draw' | 'history'
 
@@ -278,6 +278,11 @@ export default function Admin() {
     loadWinners()
   }
 
+  async function deletePrediction(id: string) {
+    await supabase.from('predictions').delete().eq('id', id)
+    setPredictions(prev => prev.filter(p => p.id !== id))
+  }
+
   async function logout() {
     await supabase.auth.signOut()
     setAuthed(false)
@@ -423,9 +428,15 @@ export default function Admin() {
                             <div className="font-semibold text-sm text-gray-800">{p.name}</div>
                             <div className="text-xs text-gray-400">{p.phone}</div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-3">
                             <span className="font-black text-spurs-navy">{p.home_score}–{p.away_score}</span>
                             {isCorrect && <CheckCircle size={16} className="text-green-500" />}
+                            <button
+                              onClick={() => { if (confirm(`Delete ${p.name}'s prediction?`)) deletePrediction(p.id) }}
+                              className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
                         </div>
                       )
