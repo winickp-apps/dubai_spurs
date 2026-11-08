@@ -872,15 +872,25 @@ export default function Admin() {
             ) : (
               winners.map((w, i) => (
                 <div key={w.id} className="bg-white rounded-2xl p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <div className="font-bold text-spurs-navy">{w.name}</div>
                       <div className="text-xs text-gray-400">{w.home_team} v {w.away_team} · {new Date(w.match_date + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric'})}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <div className="font-black text-spurs-navy">{w.predicted_home}–{w.predicted_away}</div>
                       <div className="text-xs text-gray-400">#{i + 1}</div>
                     </div>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Remove ${w.name} from the winners history?`)) return
+                        await supabase.from('winners').delete().eq('id', w.id)
+                        setWinners(prev => prev.filter(x => x.id !== w.id))
+                      }}
+                      className="text-gray-300 hover:text-red-500 transition-colors p-1 shrink-0"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </div>
               ))
