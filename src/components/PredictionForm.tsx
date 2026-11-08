@@ -36,7 +36,11 @@ export default function PredictionForm({ fixture }: Props) {
 
     setSubmitting(false)
     if (err) {
-      setError('Something went wrong. Please try again.')
+      if (err.code === '23505') {
+        setError('You have already submitted a prediction for this match. Contact an organiser if you need to change it.')
+      } else {
+        setError('Something went wrong. Please try again.')
+      }
     } else {
       setSubmitted(true)
     }
