@@ -121,10 +121,16 @@ export default function PredictionForm({ fixture }: Props) {
         <p className="text-gray-600 text-sm mb-3">
           Good luck, <span className="font-semibold">{name}</span>!
         </p>
-        <div className="bg-spurs-navy text-white rounded-xl px-4 py-3 inline-block">
+        <div className="bg-spurs-navy text-white rounded-xl px-4 py-3 inline-block mb-3">
           <div className="text-xs text-blue-200 mb-1">{fixture.home_team} vs {fixture.away_team}</div>
           <div className="text-2xl font-black">{homeScore} – {awayScore}</div>
         </div>
+        {!fixture.predictions_open && (
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-3 py-1.5 mx-auto w-fit">
+            <span>🔒</span>
+            Predictions are now closed
+          </div>
+        )}
       </div>
     )
   }
