@@ -1,6 +1,3 @@
-const API_KEY = import.meta.env.VITE_FOOTBALL_API_KEY as string
-const SPURS_ID = 73
-
 const FINISHED_STATUSES = new Set(['FINISHED', 'IN_PLAY', 'PAUSED', 'CANCELLED', 'ABANDONED', 'POSTPONED'])
 
 export interface ApiMatch {
@@ -14,10 +11,7 @@ export interface ApiMatch {
 }
 
 export async function getUpcomingSpursMatches(): Promise<ApiMatch[]> {
-  const res = await fetch(
-    `https://api.football-data.org/v4/teams/${SPURS_ID}/matches`,
-    { headers: { 'X-Auth-Token': API_KEY } }
-  )
+  const res = await fetch('/api/fixtures')
   if (!res.ok) throw new Error('Failed to fetch fixtures')
   const data = await res.json()
   const matches: ApiMatch[] = data.matches ?? []
