@@ -480,6 +480,7 @@ export default function Admin() {
   const correctPredictions = getCorrectPredictions()
   const hasResult = fixture?.actual_home_score !== null && fixture?.actual_away_score !== null
   const isLocked = !overrideMode && winners.some(w => w.fixture_id === fixture?.id)
+  const fixtureWinner = winners.find(w => w.fixture_id === fixture?.id)
 
   return (
     <div className="min-h-svh flex flex-col bg-slate-100">
@@ -741,7 +742,13 @@ export default function Admin() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-black text-spurs-navy">{p.home_score}–{p.away_score}</span>
-                            {isCorrect && <CheckCircle size={16} className="text-green-500 shrink-0" />}
+                            {fixtureWinner?.prediction_id === p.id && (
+                              <span className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
+                                <Trophy size={11} />
+                                Winner
+                              </span>
+                            )}
+                            {isCorrect && fixtureWinner?.prediction_id !== p.id && <CheckCircle size={16} className="text-green-500 shrink-0" />}
                             {isCorrect && !isLocked && (
                               <button
                                 onClick={() => setWinnerFromPrediction(p)}
