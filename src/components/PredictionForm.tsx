@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Fixture } from '../lib/types'
 import ScorePicker from './ScorePicker'
-import { CheckCircle, Phone } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 
 interface Props {
   fixture: Fixture
@@ -29,67 +29,30 @@ function loadSaved(fixtureId: string): SavedPrediction | null {
   }
 }
 
-function savePrediction(data: SavedPrediction) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-}
-
-type Stage = 'phone-gate' | 'form' | 'submitted'
-
 export default function PredictionForm({ fixture }: Props) {
   const cached = loadSaved(fixture.id)
 
-  const [stage, setStage] = useState<Stage>(cached ? 'submitted' : 'phone-gate')
-  const [gatPhone, setGatPhone] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [gateError, setGateError] = useState('')
-
-  const [phone, setPhone] = useState(cached?.phone ?? '')
-  const [name, setName] = useState(cached?.name ?? '')
   const [homeScore, setHomeScore] = useState(cached?.homeScore ?? 0)
   const [awayScore, setAwayScore] = useState(cached?.awayScore ?? 0)
+  const [name, setName] = useState(cached?.name ?? '')
+  const [phone, setPhone] = useState(cached?.phone ?? '')
   const [privacy, setPrivacy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
-
-  async function handlePhoneCheck(e: React.FormEvent) {
-    e.preventDefault()
-    const trimmed = gatPhone.trim()
-    if (!trimmed) return setGateError('Please enter your mobile number.')
-    setGateError('')
-    setChecking(true)
-
-    const { data } = await supabase.rpc('get_my_prediction', {
-      p_fixture_id: fixture.id,
-      p_phone: trimmed,
-    })
-
-    setChecking(false)
-
-    if (data && data.length > 0) {
-      const existing = data[0]
-      setName(existing.name)
-      setPhone(trimmed)
-      setHomeScore(existing.home_score)
-      setAwayScore(existing.away_score)
-      savePrediction({ fixtureId: fixture.id, name: existing.name, phone: trimmed, homeScore: existing.home_score, awayScore: existing.away_score })
-      setStage('submitted')
-    } else {
-      setPhone(trimmed)
-      setStage('form')
-    }
-  }
+  const [error, setError] = useState('')
+  const [submitted, setSubmitted] = useState(!!cached)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return setSubmitError('Please enter your name.')
-    if (!privacy) return setSubmitError('Please accept the privacy notice.')
-    setSubmitError('')
+    if (!name.trim()) return setError('Please enter your name.')
+    if (!phone.trim()) return setError('Please enter your mobile number.')
+    if (!privacy) return setError('Please accept the privacy notice.')
+    setError('')
     setSubmitting(true)
 
     const { error: err } = await supabase.from('predictions').insert({
       fixture_id: fixture.id,
       name: name.trim(),
-      phone,
+      phone: phone.trim(),
       home_score: homeScore,
       away_score: awayScore,
     })
@@ -97,51 +60,23 @@ export default function PredictionForm({ fixture }: Props) {
     setSubmitting(false)
     if (err) {
       if (err.code === '23505') {
-        setSubmitError('You have already submitted a prediction for this match. Contact an organiser if you need to change it.')
+        setError('You have already submitted a prediction for this match. Contact an organiser if you need to change it.')
       } else {
-        setSubmitError('Something went wrong. Please try again.')
+        setError('Something went wrong. Please try again.')
       }
     } else {
-      savePrediction({ fixtureId: fixture.id, name: name.trim(), phone, homeScore, awayScore })
-      setStage('submitted')
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        fixtureId: fixture.id,
+        name: name.trim(),
+        phone: phone.trim(),
+        homeScore,
+        awayScore,
+      }))
+      setSubmitted(true)
     }
   }
 
-  // ── Phone gate ───────────────────────────────────────────────────────────
-  if (stage === 'phone-gate') {
-    return (
-      <form onSubmit={handlePhoneCheck} className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Phone size={16} className="text-spurs-navy" />
-          <h3 className="text-sm font-bold text-spurs-navy uppercase tracking-wide">Enter Your Number to Continue</h3>
-        </div>
-        <p className="text-xs text-gray-500">We use this to check if you've already submitted and to contact you if you win.</p>
-        <input
-          type="tel"
-          value={gatPhone}
-          onChange={e => setGatPhone(e.target.value)}
-          placeholder="Mobile number"
-          required
-          autoFocus
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy"
-          autoComplete="tel"
-        />
-        {gateError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{gateError}</div>
-        )}
-        <button
-          type="submit"
-          disabled={checking}
-          className="w-full bg-spurs-navy text-white font-bold py-4 rounded-2xl text-base disabled:opacity-60"
-        >
-          {checking ? 'Checking…' : 'Continue'}
-        </button>
-      </form>
-    )
-  }
-
-  // ── Confirmation ─────────────────────────────────────────────────────────
-  if (stage === 'submitted') {
+  if (submitted) {
     return (
       <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
         <CheckCircle className="mx-auto text-green-500 mb-3" size={48} />
@@ -157,7 +92,6 @@ export default function PredictionForm({ fixture }: Props) {
     )
   }
 
-  // ── Prediction form ───────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -189,9 +123,15 @@ export default function PredictionForm({ fixture }: Props) {
 
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Mobile Number</label>
-          <div className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-500">
-            {phone}
-          </div>
+          <input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="Mobile number"
+            required
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy"
+            autoComplete="tel"
+          />
         </div>
 
         <label className="flex items-start gap-3 cursor-pointer">
@@ -208,9 +148,9 @@ export default function PredictionForm({ fixture }: Props) {
         </label>
       </div>
 
-      {submitError && (
+      {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-          {submitError}
+          {error}
         </div>
       )}
 
