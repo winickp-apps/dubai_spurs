@@ -612,7 +612,13 @@ export default function Admin() {
         {/* ── Draw Tab ── */}
         {tab === 'draw' && (
           <div className="space-y-4">
-            {!fixture || !hasResult ? (
+            {isLocked ? (
+              <div className="bg-white rounded-2xl p-6 text-center shadow-sm space-y-2">
+                <Trophy size={32} className="mx-auto text-yellow-400" />
+                <p className="font-semibold text-spurs-navy">Winner already saved</p>
+                <p className="text-sm text-gray-500">Use Override in the banner above if you need to draw again.</p>
+              </div>
+            ) : !fixture || !hasResult ? (
               <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
                 <p className="text-gray-500 text-sm">Set the final score in the Predictions tab first.</p>
               </div>
