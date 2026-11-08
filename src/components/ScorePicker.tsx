@@ -5,19 +5,9 @@ interface Props {
   onChange: (v: number) => void
 }
 
-export default function ScorePicker({ label, crest, value, onChange }: Props) {
+export default function ScorePicker({ label, value, onChange }: Props) {
   return (
     <div className="flex flex-col items-center gap-2">
-      {crest ? (
-        <img
-          src={crest}
-          alt={label}
-          className="w-10 h-10 object-contain"
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-        />
-      ) : (
-        <div className="w-10 h-10" />
-      )}
       <span className="text-xs font-bold text-spurs-navy uppercase tracking-wider text-center leading-tight w-28 h-8 flex items-center justify-center">
         {label}
       </span>
