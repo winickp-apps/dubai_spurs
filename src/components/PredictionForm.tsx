@@ -84,13 +84,13 @@ export default function PredictionForm({ fixture }: Props) {
     setError('')
     setSubmitting(true)
 
-    const { data: inserted, error: err } = await supabase.from('predictions').insert({
+    const { error: err } = await supabase.from('predictions').insert({
       fixture_id: fixture.id,
       name: name.trim(),
       phone: phone.trim(),
       home_score: homeScore,
       away_score: awayScore,
-    }).select('id').single()
+    })
 
     setSubmitting(false)
     if (err) {
@@ -100,13 +100,14 @@ export default function PredictionForm({ fixture }: Props) {
         setError('Something went wrong. Please try again.')
       }
     } else {
+      // predictionId is not stored here (anon can't SELECT after INSERT).
+      // It is populated from get_my_prediction on the next page load.
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         fixtureId: fixture.id,
         name: name.trim(),
         phone: phone.trim(),
         homeScore,
         awayScore,
-        predictionId: inserted?.id,
       }))
       setSubmitted(true)
     }
