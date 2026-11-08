@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Fixture } from '../lib/types'
 import ScorePicker from './ScorePicker'
@@ -40,6 +40,25 @@ export default function PredictionForm({ fixture }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(!!cached)
+  const [verifying, setVerifying] = useState(!!cached)
+
+  useEffect(() => {
+    if (!cached) return
+    supabase.rpc('get_my_prediction', {
+      p_fixture_id: fixture.id,
+      p_phone: cached.phone,
+    }).then(({ data }) => {
+      if (!data || data.length === 0) {
+        localStorage.removeItem(STORAGE_KEY)
+        setSubmitted(false)
+        setName('')
+        setPhone('')
+        setHomeScore(0)
+        setAwayScore(0)
+      }
+      setVerifying(false)
+    })
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -74,6 +93,14 @@ export default function PredictionForm({ fixture }: Props) {
       }))
       setSubmitted(true)
     }
+  }
+
+  if (verifying) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center justify-center h-32">
+        <div className="w-6 h-6 border-2 border-spurs-navy border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   if (submitted) {
