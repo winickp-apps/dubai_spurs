@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Fixture } from '../lib/types'
 import ScorePicker from './ScorePicker'
@@ -8,15 +8,50 @@ interface Props {
   fixture: Fixture
 }
 
+const STORAGE_KEY = 'ds_prediction'
+
+interface SavedPrediction {
+  fixtureId: string
+  name: string
+  homeScore: number
+  awayScore: number
+}
+
+function loadSaved(fixtureId: string): SavedPrediction | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const saved: SavedPrediction = JSON.parse(raw)
+    return saved.fixtureId === fixtureId ? saved : null
+  } catch {
+    return null
+  }
+}
+
 export default function PredictionForm({ fixture }: Props) {
-  const [homeScore, setHomeScore] = useState(0)
-  const [awayScore, setAwayScore] = useState(0)
-  const [name, setName] = useState('')
+  const saved = loadSaved(fixture.id)
+
+  const [homeScore, setHomeScore] = useState(saved?.homeScore ?? 0)
+  const [awayScore, setAwayScore] = useState(saved?.awayScore ?? 0)
+  const [name, setName] = useState(saved?.name ?? '')
   const [phone, setPhone] = useState('')
   const [privacy, setPrivacy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [submitted, setSubmitted] = useState(false)
+  const [submitted, setSubmitted] = useState(!!saved)
+
+  useEffect(() => {
+    // Clear stale predictions from previous fixtures
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const saved: SavedPrediction = JSON.parse(raw)
+        if (saved.fixtureId !== fixture.id) localStorage.removeItem(STORAGE_KEY)
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }, [fixture.id])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,6 +77,12 @@ export default function PredictionForm({ fixture }: Props) {
         setError('Something went wrong. Please try again.')
       }
     } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        fixtureId: fixture.id,
+        name: name.trim(),
+        homeScore,
+        awayScore,
+      }))
       setSubmitted(true)
     }
   }
