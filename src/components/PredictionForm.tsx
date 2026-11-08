@@ -95,6 +95,16 @@ export default function PredictionForm({ fixture }: Props) {
     }
   }
 
+  if (!fixture.predictions_open && !submitted && !verifying) {
+    return (
+      <div className="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div className="text-3xl mb-2">🔒</div>
+        <p className="font-semibold text-spurs-navy">Predictions are closed</p>
+        <p className="text-sm text-gray-500 mt-1">The organiser has locked this week's entries.</p>
+      </div>
+    )
+  }
+
   if (verifying) {
     return (
       <div className="bg-white rounded-2xl p-6 shadow-sm flex items-center justify-center h-32">
