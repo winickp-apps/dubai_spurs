@@ -16,6 +16,7 @@ interface SavedPrediction {
   phone: string
   homeScore: number
   awayScore: number
+  predictionId?: string
 }
 
 function loadSaved(fixtureId: string): SavedPrediction | null {
@@ -41,13 +42,14 @@ export default function PredictionForm({ fixture }: Props) {
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(!!cached)
   const [verifying, setVerifying] = useState(!!cached)
+  const [isWinner, setIsWinner] = useState(false)
 
   useEffect(() => {
     if (!cached) return
     supabase.rpc('get_my_prediction', {
       p_fixture_id: fixture.id,
       p_phone: cached.phone,
-    }).then(({ data }) => {
+    }).then(async ({ data }) => {
       if (!data || data.length === 0) {
         localStorage.removeItem(STORAGE_KEY)
         setSubmitted(false)
@@ -55,7 +57,21 @@ export default function PredictionForm({ fixture }: Props) {
         setPhone('')
         setHomeScore(0)
         setAwayScore(0)
+        setVerifying(false)
+        return
       }
+
+      // Check if this prediction was drawn as the winner
+      const predId = cached.predictionId ?? data[0]?.id
+      if (predId) {
+        const { data: winnerRow } = await supabase
+          .from('winners')
+          .select('id')
+          .eq('prediction_id', predId)
+          .maybeSingle()
+        if (winnerRow) setIsWinner(true)
+      }
+
       setVerifying(false)
     })
   }, [])
@@ -68,13 +84,13 @@ export default function PredictionForm({ fixture }: Props) {
     setError('')
     setSubmitting(true)
 
-    const { error: err } = await supabase.from('predictions').insert({
+    const { data: inserted, error: err } = await supabase.from('predictions').insert({
       fixture_id: fixture.id,
       name: name.trim(),
       phone: phone.trim(),
       home_score: homeScore,
       away_score: awayScore,
-    })
+    }).select('id').single()
 
     setSubmitting(false)
     if (err) {
@@ -90,6 +106,7 @@ export default function PredictionForm({ fixture }: Props) {
         phone: phone.trim(),
         homeScore,
         awayScore,
+        predictionId: inserted?.id,
       }))
       setSubmitted(true)
     }
@@ -114,6 +131,22 @@ export default function PredictionForm({ fixture }: Props) {
   }
 
   if (submitted) {
+    if (isWinner) {
+      return (
+        <div className="bg-yellow-400 rounded-2xl p-6 shadow-sm text-center">
+          <div className="text-5xl mb-2">🏆</div>
+          <h2 className="text-2xl font-black text-yellow-900 mb-1">You Won!</h2>
+          <p className="text-yellow-800 text-sm mb-4">
+            Congratulations, <span className="font-bold">{name}</span>! Your prediction was selected as this week's winner.
+          </p>
+          <div className="bg-yellow-900/20 rounded-xl px-4 py-3 inline-block">
+            <div className="text-xs text-yellow-800 mb-1">{fixture.home_team} vs {fixture.away_team}</div>
+            <div className="text-2xl font-black text-yellow-900">{homeScore} – {awayScore}</div>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
         <CheckCircle className="mx-auto text-green-500 mb-3" size={48} />
