@@ -175,6 +175,13 @@ export default function Admin() {
   const [drawnWinner, setDrawnWinner] = useState<Prediction | null>(null)
   const [drawing, setDrawing] = useState(false)
   const [winnerSaved, setWinnerSaved] = useState(false)
+  const [addingManual, setAddingManual] = useState(false)
+  const [manualName, setManualName] = useState('')
+  const [manualPhone, setManualPhone] = useState('')
+  const [manualHome, setManualHome] = useState(0)
+  const [manualAway, setManualAway] = useState(0)
+  const [manualSaving, setManualSaving] = useState(false)
+  const [manualError, setManualError] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -276,6 +283,32 @@ export default function Admin() {
     })
     setWinnerSaved(true)
     loadWinners()
+  }
+
+  async function addManualPrediction() {
+    if (!fixture) return
+    if (!manualName.trim()) return setManualError('Name is required.')
+    if (!manualPhone.trim()) return setManualError('Phone is required.')
+    setManualError('')
+    setManualSaving(true)
+    const { error } = await supabase.from('predictions').insert({
+      fixture_id: fixture.id,
+      name: manualName.trim(),
+      phone: manualPhone.trim(),
+      home_score: manualHome,
+      away_score: manualAway,
+    })
+    setManualSaving(false)
+    if (error) {
+      setManualError(error.code === '23505' ? 'A prediction for that phone number already exists.' : 'Something went wrong.')
+    } else {
+      setManualName('')
+      setManualPhone('')
+      setManualHome(0)
+      setManualAway(0)
+      setAddingManual(false)
+      loadPredictions(fixture.id)
+    }
   }
 
   async function deletePrediction(id: string) {
@@ -410,6 +443,60 @@ export default function Admin() {
                     </div>
                   </div>
                 </div>
+
+                {/* Manual add */}
+                {!addingManual ? (
+                  <button
+                    onClick={() => setAddingManual(true)}
+                    className="w-full flex items-center justify-center gap-2 bg-white border border-dashed border-gray-300 text-gray-500 font-semibold text-sm py-3 rounded-2xl hover:border-spurs-navy hover:text-spurs-navy transition-colors"
+                  >
+                    <Plus size={16} />
+                    Add prediction manually
+                  </button>
+                ) : (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-spurs-navy">Add Manually</span>
+                      <button onClick={() => { setAddingManual(false); setManualError('') }} className="text-gray-400 text-xs">Cancel</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">Full Name</label>
+                        <input value={manualName} onChange={e => setManualName(e.target.value)} placeholder="Name"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">Mobile Number</label>
+                        <input type="tel" value={manualPhone} onChange={e => setManualPhone(e.target.value)} placeholder="Phone"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="text-xs text-gray-500 w-14 shrink-0">{fixture.home_team.split(' ')[0]}</span>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => setManualHome(h => Math.max(0, h - 1))} className="w-7 h-7 rounded-full bg-spurs-navy text-white text-sm font-bold flex items-center justify-center">−</button>
+                          <span className="w-6 text-center font-black text-spurs-navy">{manualHome}</span>
+                          <button type="button" onClick={() => setManualHome(h => Math.min(20, h + 1))} className="w-7 h-7 rounded-full bg-spurs-navy text-white text-sm font-bold flex items-center justify-center">+</button>
+                        </div>
+                      </div>
+                      <span className="text-gray-300 font-bold">–</span>
+                      <div className="flex items-center gap-2 flex-1 justify-end">
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => setManualAway(a => Math.max(0, a - 1))} className="w-7 h-7 rounded-full bg-spurs-navy text-white text-sm font-bold flex items-center justify-center">−</button>
+                          <span className="w-6 text-center font-black text-spurs-navy">{manualAway}</span>
+                          <button type="button" onClick={() => setManualAway(a => Math.min(20, a + 1))} className="w-7 h-7 rounded-full bg-spurs-navy text-white text-sm font-bold flex items-center justify-center">+</button>
+                        </div>
+                        <span className="text-xs text-gray-500 w-14 shrink-0 text-right">{fixture.away_team.split(' ')[0]}</span>
+                      </div>
+                    </div>
+                    {manualError && <p className="text-xs text-red-600">{manualError}</p>}
+                    <button onClick={addManualPrediction} disabled={manualSaving}
+                      className="w-full bg-spurs-navy text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60">
+                      {manualSaving ? 'Saving…' : 'Add Prediction'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Predictions list */}
                 {predictions.length === 0 ? (
