@@ -182,6 +182,11 @@ export default function Admin() {
   const [manualAway, setManualAway] = useState(0)
   const [manualSaving, setManualSaving] = useState(false)
   const [manualError, setManualError] = useState('')
+  const [overrideMode, setOverrideMode] = useState(false)
+  const [showUnlock, setShowUnlock] = useState(false)
+  const [unlockPassword, setUnlockPassword] = useState('')
+  const [unlockError, setUnlockError] = useState('')
+  const [unlocking, setUnlocking] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -316,6 +321,24 @@ export default function Admin() {
     setPredictions(prev => prev.filter(p => p.id !== id))
   }
 
+  async function handleUnlock(e: React.FormEvent) {
+    e.preventDefault()
+    setUnlockError('')
+    setUnlocking(true)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: 'admin@dubaispurs.local',
+      password: unlockPassword,
+    })
+    setUnlocking(false)
+    if (error) {
+      setUnlockError('Incorrect password.')
+    } else {
+      setOverrideMode(true)
+      setShowUnlock(false)
+      setUnlockPassword('')
+    }
+  }
+
   async function logout() {
     await supabase.auth.signOut()
     setAuthed(false)
@@ -327,6 +350,7 @@ export default function Admin() {
 
   const correctPredictions = getCorrectPredictions()
   const hasResult = fixture?.actual_home_score !== null && fixture?.actual_away_score !== null
+  const isLocked = !overrideMode && winners.some(w => w.fixture_id === fixture?.id)
 
   return (
     <div className="min-h-svh flex flex-col bg-slate-100">
@@ -339,6 +363,54 @@ export default function Admin() {
             Sign out
           </button>
         </div>
+
+        {/* Lock banner */}
+        {isLocked && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Lock size={15} className="text-amber-600 shrink-0" />
+              <span className="text-xs font-semibold text-amber-700">Winner saved — predictions & result are locked.</span>
+            </div>
+            <button onClick={() => setShowUnlock(true)} className="text-xs font-bold text-amber-700 underline shrink-0">Override</button>
+          </div>
+        )}
+        {overrideMode && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+            <Unlock size={15} className="text-red-500 shrink-0" />
+            <span className="text-xs font-semibold text-red-600">Override mode active — changes are allowed.</span>
+          </div>
+        )}
+
+        {/* Unlock modal */}
+        {showUnlock && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+              <h3 className="font-bold text-spurs-navy text-lg mb-1">Admin Override</h3>
+              <p className="text-sm text-gray-500 mb-4">Enter your password to unlock editing.</p>
+              <form onSubmit={handleUnlock} className="space-y-3">
+                <input
+                  type="password"
+                  value={unlockPassword}
+                  onChange={e => setUnlockPassword(e.target.value)}
+                  placeholder="Password"
+                  autoFocus
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spurs-navy"
+                />
+                {unlockError && <p className="text-xs text-red-600">{unlockError}</p>}
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => { setShowUnlock(false); setUnlockPassword(''); setUnlockError('') }}
+                    className="flex-1 border border-gray-200 text-gray-500 font-bold py-3 rounded-2xl text-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={unlocking}
+                    className="flex-1 bg-spurs-navy text-white font-bold py-3 rounded-2xl text-sm disabled:opacity-60">
+                    {unlocking ? '…' : 'Unlock'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="grid grid-cols-4 gap-1 bg-white rounded-2xl p-1 shadow-sm">
@@ -435,8 +507,8 @@ export default function Admin() {
                         className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-spurs-navy"
                       />
                       <button
-                        onClick={saveResult} disabled={savingResult}
-                        className="bg-spurs-navy text-white text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-60"
+                        onClick={saveResult} disabled={savingResult || isLocked}
+                        className="bg-spurs-navy text-white text-sm font-bold px-4 py-2 rounded-xl disabled:opacity-40"
                       >
                         {savingResult ? '…' : 'Save'}
                       </button>
@@ -447,8 +519,9 @@ export default function Admin() {
                 {/* Manual add */}
                 {!addingManual ? (
                   <button
-                    onClick={() => setAddingManual(true)}
-                    className="w-full flex items-center justify-center gap-2 bg-white border border-dashed border-gray-300 text-gray-500 font-semibold text-sm py-3 rounded-2xl hover:border-spurs-navy hover:text-spurs-navy transition-colors"
+                    onClick={() => !isLocked && setAddingManual(true)}
+                    disabled={isLocked}
+                    className="w-full flex items-center justify-center gap-2 bg-white border border-dashed border-gray-300 text-gray-500 font-semibold text-sm py-3 rounded-2xl hover:border-spurs-navy hover:text-spurs-navy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Plus size={16} />
                     Add prediction manually
@@ -519,8 +592,9 @@ export default function Admin() {
                             <span className="font-black text-spurs-navy">{p.home_score}–{p.away_score}</span>
                             {isCorrect && <CheckCircle size={16} className="text-green-500" />}
                             <button
-                              onClick={() => { if (confirm(`Delete ${p.name}'s prediction?`)) deletePrediction(p.id) }}
-                              className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                              onClick={() => { if (!isLocked && confirm(`Delete ${p.name}'s prediction?`)) deletePrediction(p.id) }}
+                              disabled={isLocked}
+                              className="text-gray-300 hover:text-red-500 transition-colors p-1 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <Trash2 size={15} />
                             </button>
